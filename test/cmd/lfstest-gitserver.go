@@ -22,6 +22,7 @@ import (
 	"log"
 	"math"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
@@ -1275,7 +1276,7 @@ func generateCARootCertificates() (rootKey *rsa.PrivateKey, rootCert *x509.Certi
 	rootCertTmpl.IsCA = true
 	rootCertTmpl.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature
 	rootCertTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
-	//	rootCertTmpl.IPAddresses = []net.IP{net.ParseIP("127.0.0.1")}
+	rootCertTmpl.IPAddresses = []net.IP{net.ParseIP("127.0.0.1", "::1")}
 
 	rootCert, rootPEM, err = CreateCert(rootCertTmpl, rootCertTmpl, &rootKey.PublicKey, rootKey)
 
