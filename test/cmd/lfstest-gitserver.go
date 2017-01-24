@@ -71,14 +71,25 @@ func main() {
 	serverClientCert = httptest.NewUnstartedServer(mux)
 
 	//setup Client Cert server
-	rootKey, rootCert := generateCARootCertificates()
+	rootKey, rootCert, rootPEM := generateCARootCertificates()
 	_, clientCertPEM, clientKeyPEM := generateClientCertificates(rootCert, rootKey)
 
 	certPool := x509.NewCertPool()
 	certPool.AddCert(rootCert)
 
+	// PEM encode the private key
+	rootKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(rootKey),
+	})
+
+	// Create a TLS cert using the private key and certificate
+	rootTLSCert, err := tls.X509KeyPair(rootPEM, rootKeyPEM)
+	if err != nil {
+		log.Fatalf("invalid key pair: %v", err)
+	}
+
 	serverClientCert.TLS = &tls.Config{
-		Certificates: []tls.Certificate{serverTLS.TLS.Certificates[0]},
+		Certificates: []tls.Certificate{rootTLSCert},
 		ClientAuth:   tls.RequireAndVerifyClientCert,
 		ClientCAs:    certPool,
 	}
@@ -1248,7 +1259,7 @@ func reqId(w http.ResponseWriter) (string, bool) {
 }
 
 // https://ericchiang.github.io/post/go-tls/
-func generateCARootCertificates() (rootKey *rsa.PrivateKey, rootCert *x509.Certificate) {
+func generateCARootCertificates() (rootKey *rsa.PrivateKey, rootCert *x509.Certificate, rootPEM []byte) {
 
 	// generate a new key-pair
 	rootKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -1266,7 +1277,7 @@ func generateCARootCertificates() (rootKey *rsa.PrivateKey, rootCert *x509.Certi
 	rootCertTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
 	//	rootCertTmpl.IPAddresses = []net.IP{net.ParseIP("127.0.0.1")}
 
-	rootCert, _, err = CreateCert(rootCertTmpl, rootCertTmpl, &rootKey.PublicKey, rootKey)
+	rootCert, rootPEM, err = CreateCert(rootCertTmpl, rootCertTmpl, &rootKey.PublicKey, rootKey)
 
 	return
 }
@@ -1333,6 +1344,7 @@ func CreateCert(template, parent *x509.Certificate, pub interface{}, parentPriv 
 	if err != nil {
 		return
 	}
+
 	// PEM encode the certificate (this is a standard TLS encoding)
 	b := pem.Block{Type: "CERTIFICATE", Bytes: certDER}
 	certPEM = pem.EncodeToMemory(&b)
